@@ -52,7 +52,7 @@ def main_specifications(panel, pair):
     rows = [
         _row(cluster_fit(panel, "ln_ntl ~ treated_x_post + C(unit_id) + C(year)"),
              "treated_x_post", "unit and year FE"),
-        _row(cluster_fit(panel, "ln_ntl ~ treated_x_post + C(unit_id) + C(group_year)"),
+        _row(cluster_fit(panel, "ln_ntl ~ treated_x_post + C(G1ID):treated + C(group_year)"),
              "treated_x_post", "ethnicity-by-year FE"),
         _row(cluster_fit(pair, MAIN), "post", "within-pair gap"),
         _row(cluster_fit(pair, "gap ~ post + C(G1ID) + C(year)"),
