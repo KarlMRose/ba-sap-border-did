@@ -15,7 +15,7 @@ import pandas as pd
 import statsmodels.formula.api as smf
 
 import config
-import panel as panel_mod
+import panelbuild as panel_mod
 
 MAIN = "gap ~ post + C(G1ID)"
 
