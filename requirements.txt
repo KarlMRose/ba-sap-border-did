@@ -1,1 +1,10 @@
-
+geopandas>=0.14
+rasterstats>=0.19
+shapely>=2.0
+pyproj>=3.6
+pandas>=2.2
+numpy>=1.26
+statsmodels>=0.14
+scipy>=1.11
+matplotlib>=3.8
+jupyter
