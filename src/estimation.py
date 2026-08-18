@@ -257,8 +257,9 @@ def brightness_threshold(pair, thresholds=(0.0, 0.01, 0.05, 0.1)):
 
 
 BIN_EDGES = [-99, -6, -3, -1, 2, 5, 10, 15, 99]
-BIN_LABELS = ["t<=-6", "-5..-3", "-2..-1", "0..2", "3..5", "6..10", "11..15", "t>15"]
-BIN_REFERENCE = "-2..-1"
+BIN_LABELS = ["≤ −6", "−5 to −3", "−2 to −1", "0 to 2", "3 to 5",
+              "6 to 10", "11 to 15", "> 15"]
+BIN_REFERENCE = "−2 to −1"
 
 
 def event_time_bins(pair, edges=None, labels=None, reference=None):
