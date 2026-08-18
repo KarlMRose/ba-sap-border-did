@@ -302,6 +302,43 @@ def event_time_bins(pair, edges=None, labels=None, reference=None):
     out = pd.DataFrame(rows).merge(counts, on="bin", how="left")
     return out.reset_index(drop=True), model
 
+def callaway_santanna(panel):
+    """Cohort ATTs in the spirit of Callaway & Sant'Anna (2021).
+
+    Reported for comparison only: the estimator assumes treatment is
+    absorbing, which the programme episodes show is not the case here.
+    """
+    cohorts = sorted(panel.loc[panel["treated"] == 1, "first_sap_year"].dropna().unique())
+    cohorts = [int(g) for g in cohorts if g > panel["year"].min()]
+
+    rows = []
+    for g in cohorts:
+        treated_units = panel.loc[(panel["treated"] == 1) &
+                                  (panel["first_sap_year"] == g), "unit_id"].unique()
+        control_units = panel.loc[(panel["treated"] == 0) |
+                                  ((panel["treated"] == 1) &
+                                   (panel["first_sap_year"] > g)), "unit_id"].unique()
+
+        sub = panel[panel["unit_id"].isin([*treated_units, *control_units])].copy()
+        sub["cohort_treat"] = sub["unit_id"].isin(treated_units).astype(int)
+
+        # a not-yet-treated control only counts until its own entry
+        sub = sub[~((sub["cohort_treat"] == 0) & (sub["treated"] == 1) &
+                    (sub["year"] >= sub["first_sap_year"]))]
+        sub["interaction"] = sub["cohort_treat"] * (sub["year"] >= g).astype(int)
+
+        if sub["interaction"].sum() == 0 or (sub["cohort_treat"] == 0).sum() == 0:
+            continue
+
+        m = cluster_fit(sub, "ln_ntl ~ interaction + C(unit_id) + C(year)")
+        rows.append({"cohort": g, "att": float(m.params["interaction"]),
+                     "se": float(m.bse["interaction"]),
+                     "n_treated": len(treated_units)})
+
+    out = pd.DataFrame(rows)
+    weights = out["n_treated"] / out["n_treated"].sum()
+    return out, float((out["att"] * weights).sum())
+
 def run(panel, pair):
     specs = main_specifications(panel, pair)
     observed = float(cluster_fit(pair, MAIN).params["post"])
