@@ -74,7 +74,7 @@ def event_study(coefs, name="event_study"):
     return fig, ax
 
 
-def event_time_bins(bins, reference="-2..-1", name="event_time_bins"):
+def event_time_bins(bins, reference="−2 to −1", name="event_time_bins"):
     """Effect by band of event time, with the reference band pinned at zero."""
     bins = bins.reset_index(drop=True)
     x = list(range(len(bins)))
