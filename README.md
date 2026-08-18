@@ -49,7 +49,7 @@ The package contains:
    - `01_treatment.ipynb` — build SAP indicators from the Vreeland data
    - `02_buffer_and_ntl.ipynb` — 50 km border buffers, extract nighttime lights
    - `03_panel.ipynb` — assemble the panel and the within-pair differences
-   - `04_results.ipynb` — main estimates, event study, robustness
+   - `04_results.ipynb` — main estimates, event study, sample map
    - `05_inference.ipynb` — bootstrap and randomization inference
 
 Each notebook writes intermediate files to `data/work/`, so they need to run in
