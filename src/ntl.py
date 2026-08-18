@@ -72,7 +72,7 @@ def add_outcome(df, offset=None):
 
 
 def check(df):
-    """Two things worth knowing before trusting the panel."""
+    """Sanity checks on the extracted panel."""
     missing = df["ntl_mean"].isna().sum()
     print(f"missing radiance values: {missing}")
 
@@ -80,7 +80,7 @@ def check(df):
     # the DMSP and VIIRS grids aren't perfectly registered - fine as long as
     # it stays well under a percent.
     counts = df.groupby("unit_id")["ntl_count"].agg(["min", "max"])
-    counts["spread_pct"] = 100 * (counts["max"] - counts["min"]) / counts["min"]
+    counts["spread_pct"] = 100 * (counts["max"] - counts["min"]) / counts["min"].clip(lower=1)
     worst = counts.sort_values("spread_pct", ascending=False).head(5)
     print("largest pixel count variation:")
     print(worst.to_string())

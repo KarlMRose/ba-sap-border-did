@@ -6,9 +6,7 @@ lie within 50 km of the *other* side's polygons, otherwise we'd keep bits of
 the group that sit on the border somewhere far away from their counterpart.
 
 The dissolve at the end matters: GREG splits a group into several polygons,
-and zonal_stats returns one row per polygon. Without dissolving, a single
-ethnicity-country side shows up two or three times in the same year and the
-panel silently doubles in size.
+so without it each side shows up several times per year in the panel.
 """
 
 import geopandas as gpd
@@ -100,8 +98,7 @@ def clip_group(polys, border, fips_a, fips_b):
 def build(group_ids, verbose=True):
     """Border strips for every group in group_ids.
 
-    Returns the dissolved buffers plus a dict of what got dropped and why,
-    which goes into the sample construction table in the thesis.
+    Returns the dissolved buffers and a dict of what got dropped and why.
     """
     crs = buffer_crs()
     print(f"buffer CRS: {crs}, width {config.BUFFER_KM} km\n")
@@ -119,6 +116,7 @@ def build(group_ids, verbose=True):
         fips = sorted(polys["FIPS_CNTRY"].unique())
 
         if len(fips) != 2:
+            print(f"  {gid} {name}: {len(fips)} countries {fips}, skipped")
             dropped["no_country"].append(gid)
             continue
 
@@ -150,8 +148,8 @@ def build(group_ids, verbose=True):
         if ids:
             print(f"dropped ({reason}): {ids}")
 
-    sides = buffers.groupby("G1ID").size()
-    bad = sides[sides != 2]
+    per_group = buffers.groupby("G1ID").size()
+    bad = per_group[per_group != 2]
     if len(bad):
         raise ValueError(f"groups without two sides after dissolve: {bad.index.tolist()}")
 

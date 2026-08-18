@@ -6,7 +6,6 @@ those are the ones a colonial border cut through.
 """
 
 import geopandas as gpd
-import pandas as pd
 
 import config
 

@@ -6,8 +6,6 @@ side per group, a first treatment year, no groups that were already treated in
 within-pair difference, which is what the main specification actually runs on.
 """
 
-import pandas as pd
-
 import config
 
 
@@ -82,9 +80,8 @@ def _report(df, label):
 def pair_difference(panel):
     """One row per group and year, holding the light gap between the two sides.
 
-    With exactly two units per group this is the same model as the unit-level
-    panel with ethnicity-by-year fixed effects, just written so you can see
-    what is being compared.
+    With two units per group this is the same model as the unit-level panel
+    with ethnicity-by-year fixed effects.
     """
     cols = ["G1ID", "name", "year", "ln_ntl", "ntl_mean", "FIPS_CNTRY"]
     treated = (

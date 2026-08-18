@@ -2,7 +2,6 @@
 
 Everything is sized for the text width of the document and saved as PDF, so
 LaTeX includes the figures at their natural size and never rescales them.
-Rescaling is what makes fonts in one figure look bigger than in the next.
 
 Call setup() once at the top of a notebook.
 """
@@ -15,8 +14,8 @@ import config
 # \the\textwidth in the LaTeX source once and dividing by 72.27.
 # article, a4paper, 12pt with default margins is about 4.8 in.
 TEXT_WIDTH = 4.8
-FULL = (TEXT_WIDTH, TEXT_WIDTH * 0.62)      # single figure
-WIDE = (TEXT_WIDTH, TEXT_WIDTH * 0.45)      # event study, time on the x axis
+WIDE = (TEXT_WIDTH, TEXT_WIDTH * 0.55)      # time on the x axis
+TALL = (TEXT_WIDTH, TEXT_WIDTH * 0.70)      # room for rotated category labels
 SQUARE = (TEXT_WIDTH, TEXT_WIDTH)           # map
 
 
@@ -24,9 +23,8 @@ def setup():
     """Serif fonts at the same size as the body text, no chartjunk."""
     plt.rcParams.update({
         "font.family": "serif",
-        # CMU Serif is Computer Modern, the LaTeX default. If it is not
-        # installed matplotlib falls through to DejaVu Serif, which is close
-        # enough that nobody notices in print.
+        # CMU Serif is Computer Modern, the LaTeX default. Falls back to
+        # DejaVu Serif if it isn't installed.
         "font.serif": ["CMU Serif", "Latin Modern Roman", "DejaVu Serif"],
         "mathtext.fontset": "cm",
         "font.size": 10,
@@ -34,16 +32,17 @@ def setup():
         "axes.labelsize": 10,
         "xtick.labelsize": 9,
         "ytick.labelsize": 9,
-        "legend.fontsize": 9,
+        "legend.fontsize": 8,
         "axes.spines.top": False,
         "axes.spines.right": False,
         "axes.linewidth": 0.8,
-        "lines.linewidth": 1.4,
+        "lines.linewidth": 1.3,
         "lines.markersize": 4,
         "legend.frameon": False,
+        # constrained_layout and bbox_inches="tight" fight each other and end
+        # up clipping axis labels, so only one of them is on.
         "figure.constrained_layout.use": True,
-        "savefig.bbox": "tight",
-        "savefig.pad_inches": 0.02,
+        "savefig.bbox": None,
         "savefig.dpi": 300,
     })
 
@@ -56,19 +55,48 @@ def save(fig, name):
 
 
 def event_study(coefs, name="event_study"):
-    """Coefficient path around treatment with a confidence band."""
+    """Coefficient path around treatment, with error bars per event year."""
     fig, ax = plt.subplots(figsize=WIDE)
     ax.axhline(0, color="black", lw=0.7, ls="--", zorder=1)
     ax.axvline(-0.5, color=config.ACCENT, lw=1.0, ls=":", zorder=1,
                label="SAP entry")
-    ax.fill_between(coefs["rel_year"], coefs["lo"], coefs["hi"],
-                    color=config.NAVY, alpha=0.18, lw=0, label="95% CI")
-    ax.plot(coefs["rel_year"], coefs["coef"], "o-", color=config.NAVY, zorder=3)
+
+    err = [coefs["coef"] - coefs["lo"], coefs["hi"] - coefs["coef"]]
+    ax.errorbar(coefs["rel_year"], coefs["coef"], yerr=err, fmt="o",
+                color=config.NAVY, ecolor=config.NAVY, elinewidth=0.9,
+                capsize=2, zorder=3, label="Coefficient (95% CI)")
 
     ax.set_xlabel("Years relative to SAP entry")
     ax.set_ylabel("Within-pair gap in ln(NTL)")
     ax.set_xticks(coefs["rel_year"])
-    ax.legend(loc="best")
+    ax.legend(loc="lower right")
+    save(fig, name)
+    return fig, ax
+
+
+def event_time_bins(bins, reference="-2..-1", name="event_time_bins"):
+    """Effect by band of event time, with the reference band pinned at zero."""
+    bins = bins.reset_index(drop=True)
+    x = list(range(len(bins)))
+
+    fig, ax = plt.subplots(figsize=TALL)
+    ax.axhline(0, color="black", lw=0.7, ls="--", zorder=1)
+
+    ref = bins.index[bins["bin"] == reference]
+    if len(ref):
+        ax.axvline(int(ref[0]) + 0.5, color=config.ACCENT, lw=1.0, ls=":",
+                   zorder=1, label="SAP entry")
+
+    err = [bins["coef"] - bins["lo"], bins["hi"] - bins["coef"]]
+    ax.errorbar(x, bins["coef"], yerr=err, fmt="o", color=config.NAVY,
+                ecolor=config.NAVY, elinewidth=0.9, capsize=2, zorder=3)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(bins["bin"], rotation=30, ha="right")
+    ax.set_xlim(-0.6, len(bins) - 0.4)
+    ax.set_xlabel("Years relative to SAP entry")
+    ax.set_ylabel("Within-pair gap in ln(NTL)")
+    ax.legend(loc="upper right")
     save(fig, name)
     return fig, ax
 
@@ -77,9 +105,9 @@ def permutation(draws, observed, name="randomization_inference"):
     """Where the observed estimate sits in the permutation distribution."""
     fig, ax = plt.subplots(figsize=WIDE)
     ax.hist(draws, bins=40, color=config.LIGHT, edgecolor="white", lw=0.4)
-    ax.axvline(0, color="black", lw=0.7, ls="--")
+    ax.axvline(0, color="black", lw=0.7, ls="--", label="No effect")
     ax.axvline(observed, color=config.ACCENT, lw=1.4,
-               label=f"observed = {observed:.3f}")
+               label=f"Observed = {observed:.3f}")
 
     ax.set_xlabel("Coefficient under permuted treatment timing")
     ax.set_ylabel("Permutations")
@@ -88,25 +116,41 @@ def permutation(draws, observed, name="randomization_inference"):
     return fig, ax
 
 
-def sample_map(buffers, africa, name="sample_map"):
-    """The border strips in context. Treated sides dark, control sides light,
-    which also keeps them apart in greyscale print."""
+def sample_map(buffers, africa, ethnic_areas=None, name="sample_map"):
+    """The border strips in context.
+
+    The strips are 50 km wide, so on a map of Africa they are barely visible
+    on their own. Passing the full ethnic territories in ethnic_areas draws
+    them underneath in grey, which shows where each pair sits.
+    """
     fig, ax = plt.subplots(figsize=SQUARE)
-    africa.plot(ax=ax, color="#F2F0EC", edgecolor=config.GREY, lw=0.3)
+    africa.plot(ax=ax, color="#F4F2EE", edgecolor=config.GREY, lw=0.25)
 
-    treated = buffers[buffers["treated"] == 1]
-    control = buffers[buffers["treated"] == 0]
-    control.plot(ax=ax, color=config.LIGHT, edgecolor=config.NAVY, lw=0.3)
-    treated.plot(ax=ax, color=config.NAVY, edgecolor="black", lw=0.3)
+    if ethnic_areas is not None:
+        ethnic_areas.plot(ax=ax, color="#D8D3CC", edgecolor="none", alpha=0.9)
 
-    ax.set_xlim(-20, 52)
-    ax.set_ylim(-35, 25)
+    buffers[buffers["treated"] == 0].plot(
+        ax=ax, color=config.LIGHT, edgecolor=config.NAVY, lw=0.25)
+    buffers[buffers["treated"] == 1].plot(
+        ax=ax, color=config.NAVY, edgecolor="black", lw=0.25)
+
+    # zoom to the data with a margin, rather than showing all of Africa
+    minx, miny, maxx, maxy = buffers.total_bounds
+    pad = 6
+    ax.set_xlim(minx - pad, maxx + pad)
+    ax.set_ylim(miny - pad, maxy + pad)
     ax.set_axis_off()
 
     handles = [
-        plt.Rectangle((0, 0), 1, 1, fc=config.NAVY, ec="black", lw=0.3),
-        plt.Rectangle((0, 0), 1, 1, fc=config.LIGHT, ec=config.NAVY, lw=0.3),
+        plt.Rectangle((0, 0), 1, 1, fc=config.NAVY, ec="black", lw=0.25),
+        plt.Rectangle((0, 0), 1, 1, fc=config.LIGHT, ec=config.NAVY, lw=0.25),
     ]
-    ax.legend(handles, ["Treated side", "Control side"], loc="lower left")
+    labels = ["Treated side", "Control side"]
+    if ethnic_areas is not None:
+        handles.append(plt.Rectangle((0, 0), 1, 1, fc="#D8D3CC", ec="none"))
+        labels.append("Full ethnic area")
+
+    ax.legend(handles, labels, loc="lower left", handlelength=1.2,
+              handleheight=0.9, borderpad=0.4)
     save(fig, name)
     return fig, ax

@@ -26,14 +26,13 @@ for d in (WORK, OUT):
 YEAR_MIN = 1992
 YEAR_MAX = 2024
 
-# FIPS codes for Sub-Saharan Africa. A few codes in here don't actually
-# appear in GREG, which doesn't matter - they just never match.
+# FIPS codes for Sub-Saharan Africa.
 SSA_FIPS = {
     "AO", "BC", "BN", "BY", "CD", "CF", "CG", "CM", "CN", "CT", "CV", "DJ",
-    "EK", "ER", "ET", "GA", "GH", "GM", "GV", "GY", "IV", "KE", "LI", "LT",
-    "ML", "MO", "MP", "MR", "MU", "MZ", "NF", "NG", "NI", "OD", "PU", "RW",
-    "SE", "SF", "SG", "SH", "SL", "SN", "SO", "SU", "SWA", "TG", "TO", "TP",
-    "TZ", "UG", "UV", "WA", "WZ", "ZA", "ZI", "ZM", "ZR",
+    "EK", "ER", "ET", "GA", "GH", "GM", "GV", "IV", "KE", "LI", "LT", "ML",
+    "MP", "MR", "MZ", "NG", "NI", "OD", "PU", "RW", "SE", "SF", "SG", "SH",
+    "SL", "SO", "SU", "TG", "TO", "TP", "TZ", "UG", "UV", "WA", "WZ", "ZA",
+    "ZI", "ZM", "ZR",
 }
 
 # Drop ethnicities with one side in South Africa - income levels there are
@@ -89,4 +88,3 @@ NAVY = "#1B3A4B"
 LIGHT = "#AECBD6"
 ACCENT = "#C0392B"
 GREY = "#7F8C8D"
-DPI = 200

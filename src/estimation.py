@@ -42,9 +42,8 @@ def _row(model, term, label, extra=None):
 def main_specifications(panel, pair):
     """Four ways of writing the same comparison, then trend controls.
 
-    The unit-level model with ethnicity-by-year fixed effects and the pair
-    difference are algebraically identical, so their coefficients have to
-    match. If they don't, the fixed effects aren't doing what we think.
+    The ethnicity-by-year FE model and the pair difference are algebraically
+    identical, so their coefficients have to match.
     """
     pair = pair.copy()
     pair["trend"] = pair["year"] - pair["year"].min()
@@ -65,18 +64,26 @@ def main_specifications(panel, pair):
     return pd.DataFrame(rows)
 
 
-def cohort_effects(pair):
-    """Separate effect per treatment cohort."""
+def cohort_effects(pair, min_groups=2):
+    """Separate effect per treatment cohort.
+
+    A cohort made up of a single ethnicity is identified by one cluster only.
+    The cluster-robust variance then collapses to zero and the p-value is
+    meaningless, so those rows keep the point estimate but lose the standard
+    error.
+    """
     model = cluster_fit(pair, "gap ~ post:C(cohort) + C(G1ID)")
     rows = []
     for term in [t for t in model.params.index if t.startswith("post:")]:
         cohort = int(term.split("[")[-1].rstrip("]").lstrip("T."))
+        groups = int(pair.loc[pair["cohort"] == cohort, "G1ID"].nunique())
+        identified = groups >= min_groups
         rows.append({
             "cohort": cohort,
             "coef": float(model.params[term]),
-            "se": float(model.bse[term]),
-            "p": float(model.pvalues[term]),
-            "groups": int(pair.loc[pair["cohort"] == cohort, "G1ID"].nunique()),
+            "se": float(model.bse[term]) if identified else float("nan"),
+            "p": float(model.pvalues[term]) if identified else float("nan"),
+            "groups": groups,
         })
     return pd.DataFrame(rows).sort_values("cohort")
 
@@ -157,12 +164,7 @@ def bootstrap(pair, formula=MAIN, n=None, seed=None):
 
 
 def randomization_inference(pair, n=None, seed=None):
-    """Shuffle the treatment years across groups and refit.
-
-    If the observed coefficient sits in the middle of this distribution, the
-    timing of the programme carries no information and whatever the estimate
-    picks up is not the treatment.
-    """
+    """Shuffle the treatment years across groups and refit."""
     n = n or config.N_PERMUTE
     rng = np.random.default_rng(seed or config.SEED)
     groups = sorted(pair["G1ID"].unique())
@@ -182,15 +184,27 @@ def randomization_inference(pair, n=None, seed=None):
     return np.array(draws)
 
 
-def describe_draws(draws, observed, label):
+def describe_draws(draws, observed, label, centre="mean"):
+    """Summarise a set of draws.
+
+    centre="mean" is for the bootstrap: the draws approximate the sampling
+    distribution of the estimate, so the p-value asks how far the estimate
+    sits from zero given that spread.
+
+    centre="zero" is for randomization inference: the draws are the null
+    distribution itself, so the p-value is just how often a permutation
+    produces something at least as large in absolute value.
+    """
     lo, hi = np.percentile(draws, [2.5, 97.5])
+    reference = draws.mean() if centre == "mean" else 0.0
     return {
         "spec": label,
         "coef": observed,
         "se": float(draws.std(ddof=1)),
         "lo": float(lo),
         "hi": float(hi),
-        "p": float(np.mean(np.abs(draws - draws.mean()) >= abs(observed))),
+        "p": float(np.mean(np.abs(draws - reference) >= abs(observed))),
+        "null_distribution": centre == "zero",
         "draws": len(draws),
     }
 
@@ -242,6 +256,51 @@ def brightness_threshold(pair, thresholds=(0.0, 0.01, 0.05, 0.1)):
     return pd.DataFrame(rows)
 
 
+BIN_EDGES = [-99, -6, -3, -1, 2, 5, 10, 15, 99]
+BIN_LABELS = ["t<=-6", "-5..-3", "-2..-1", "0..2", "3..5", "6..10", "11..15", "t>15"]
+BIN_REFERENCE = "-2..-1"
+
+
+def event_time_bins(pair, edges=None, labels=None, reference=None):
+    """Effect by broad bands of event time.
+
+    The event study only reaches +/-5, but the panel runs to +31 for the
+    earliest cohort. Binning shows the long horizon, which is where the pooled
+    estimate actually comes from.
+    """
+    edges = edges or BIN_EDGES
+    labels = labels or BIN_LABELS
+    reference = reference or BIN_REFERENCE
+
+    data = pair.copy()
+    data["bin"] = pd.cut(data["rel_year"], bins=edges, labels=labels)
+    data = data[data["bin"].notna()]
+
+    model = cluster_fit(data, f'gap ~ C(bin, Treatment("{reference}")) + C(G1ID)')
+
+    counts = (
+        data.groupby("bin", observed=True)
+        .agg(groups=("G1ID", "nunique"), n=("gap", "size"))
+        .reset_index()
+    )
+    counts["bin"] = counts["bin"].astype(str)
+
+    rows = []
+    for label in labels:
+        if label == reference:
+            rows.append({"bin": label, "coef": 0.0, "lo": 0.0, "hi": 0.0, "p": float("nan")})
+            continue
+        term = f'C(bin, Treatment("{reference}"))[T.{label}]'
+        if term not in model.params.index:
+            continue
+        ci = model.conf_int().loc[term]
+        rows.append({"bin": label, "coef": float(model.params[term]),
+                     "lo": float(ci[0]), "hi": float(ci[1]),
+                     "p": float(model.pvalues[term])})
+
+    out = pd.DataFrame(rows).merge(counts, on="bin", how="left")
+    return out.reset_index(drop=True), model
+
 def run(panel, pair):
     specs = main_specifications(panel, pair)
     observed = float(cluster_fit(pair, MAIN).params["post"])
@@ -250,7 +309,7 @@ def run(panel, pair):
     perm = randomization_inference(pair)
     inference = pd.DataFrame([
         describe_draws(boot, observed, "cluster bootstrap"),
-        describe_draws(perm, observed, "randomization inference"),
+        describe_draws(perm, observed, "randomization inference", centre="zero"),
     ])
 
     coefs, model, terms = event_study(pair)
@@ -261,5 +320,6 @@ def run(panel, pair):
     inference.to_csv(config.OUT / "inference.csv", index=False)
     coefs.to_csv(config.OUT / "event_study.csv", index=False)
     cohort_effects(pair).to_csv(config.OUT / "cohort_effects.csv", index=False)
+    event_time_bins(pair)[0].to_csv(config.OUT / "event_time_bins.csv", index=False)
 
     return specs, inference, coefs
