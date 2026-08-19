@@ -138,7 +138,7 @@ def pretrend_test(model, terms):
     }
 
 
-def bootstrap(pair, formula=MAIN, n=None, seed=None):
+def bootstrap(pair, formula=MAIN, term="post", n=None, seed=None):
     """Resample whole ethnic groups with replacement.
 
     Groups drawn twice need distinct ids, otherwise the fixed effects merge
@@ -157,7 +157,7 @@ def bootstrap(pair, formula=MAIN, n=None, seed=None):
             parts.append(part)
         sample = pd.concat(parts, ignore_index=True)
         try:
-            draws.append(float(smf.ols(formula, data=sample).fit().params["post"]))
+            draws.append(float(smf.ols(formula, data=sample).fit().params[term]))
         except Exception:
             continue
     return np.array(draws)
@@ -338,6 +338,56 @@ def callaway_santanna(panel):
     out = pd.DataFrame(rows)
     weights = out["n_treated"] / out["n_treated"].sum()
     return out, float((out["att"] * weights).sum())
+
+def programme_spells(panel, definition="narrow"):
+    """Contiguous programme episodes per treated side."""
+    rows = []
+    for gid, g in panel[panel["treated"] == 1].sort_values("year").groupby("G1ID"):
+        years = g.loc[g[definition] == 1, "year"].tolist()
+        if not years:
+            continue
+        spells, start = [], years[0]
+        for a, b in zip(years, years[1:] + [None]):
+            if b is None or b != a + 1:
+                spells.append(f"{start}-{a}" if a != start else str(a))
+                start = b
+        rows.append({"G1ID": gid, "country": g["FIPS_CNTRY"].iloc[0],
+                     "name": g["name"].iloc[0], "n_spells": len(spells),
+                     "spells": ", ".join(spells)})
+    return pd.DataFrame(rows)
+
+
+def add_active(pair, panel, definition="narrow"):
+    """Flag the years in which a programme is actually running, plus the
+    year-on-year changes used for the entry and exit regressions."""
+    active = (panel.loc[panel["treated"] == 1, ["G1ID", "year", definition]]
+              .rename(columns={definition: "active"}))
+    out = pair.merge(active, on=["G1ID", "year"], how="left").sort_values(["G1ID", "year"])
+    out["d_gap"] = out.groupby("G1ID")["gap"].diff()
+    out["d_active"] = out.groupby("G1ID")["active"].diff()
+    out["entry"] = (out["d_active"] == 1).astype(int)
+    out["exit"] = (out["d_active"] == -1).astype(int)
+    return out.reset_index(drop=True)
+
+
+def on_off_specifications(pair_active):
+    """The programme as something that switches on and off, not as an
+    absorbing state. C&S and the usual event-study estimators assume the
+    latter, which the spells table shows does not hold here."""
+    fd = pair_active.dropna(subset=["d_gap", "d_active"])
+    both = "gap ~ post + active + C(G1ID)"
+    return pd.DataFrame([
+        _row(cluster_fit(pair_active, "gap ~ active + C(G1ID)"), "active",
+             "active programme"),
+        _row(cluster_fit(pair_active, both), "post",
+             "post entry, no active programme"),
+        _row(cluster_fit(pair_active, both), "active",
+             "additional effect while active"),
+        _row(cluster_fit(fd, "d_gap ~ entry + exit + C(G1ID)"), "entry",
+             f"entry ({int(fd['entry'].sum())} events)"),
+        _row(cluster_fit(fd, "d_gap ~ entry + exit + C(G1ID)"), "exit",
+             f"exit ({int(fd['exit'].sum())} events)"),
+    ])
 
 def run(panel, pair):
     specs = main_specifications(panel, pair)
