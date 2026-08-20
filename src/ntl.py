@@ -1,8 +1,9 @@
 """Extracting nighttime light intensity for the border strips.
 
-The harmonized series (Li & Zhou 2017) comes in two parts: calDMSP for
-1992-2013 and simVIIRS for 2013-2024. 2013 exists in both, and we keep the
-DMSP version so the calibrated series stays continuous.
+The harmonized series (Li et al. 2020) comes in two parts: inter-calibrated
+DMSP for 1992-2013 and DMSP-like values simulated from VIIRS for 2014-2024.
+2013 exists in both, and we keep the DMSP version so the observed series
+stays continuous.
 """
 
 import re
