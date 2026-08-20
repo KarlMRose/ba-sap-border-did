@@ -36,8 +36,8 @@ The package contains:
 
 | Folder | Source |
 |---|---|
-| `data/raw/GREG/` | GREG shapefile, digitised from Murdock (1959) |
-| `data/raw/VIIRS/` | harmonized nighttime lights, Li & Zhou (2017), 1992–2024 |
+| `data/raw/GREG/` | GREG shapefile (Weidmann, Rød & Cederman 2010), digitised from the Atlas Narodov Mira (1964) |
+| `data/raw/VIIRS/` | harmonized DMSP/VIIRS nighttime lights, Li et al. (2020), 1992–2024 |
 | `data/raw/naturalearth/` | Natural Earth country boundaries, 10m and 110m |
 | `data/raw/vreeland/` | Vreeland IMF programme dataset |
 
