@@ -8,7 +8,7 @@ countries, nighttime light intensity as a proxy for local economic activity,
 and a border-based difference-in-differences design. Identification follows
 Michalopoulos & Papaioannou (2014): both halves of a partitioned group share
 culture, language and geography, so the main thing separating them is the
-national policy regime — including whether the country is under an SAP.
+national policy regime, including whether the country is under an SAP.
 
 ## Structure
 
@@ -29,15 +29,15 @@ Extract the ZIP into the project folder so that this path exists:
 ba-sap-border-did/data/raw/GREG/GREG.shp
 ```
 
-Keep the folder structure unchanged — all paths are resolved relative to the
+Keep the folder structure unchanged, all paths are resolved relative to the
 repository root in `src/config.py`.
 
 The package contains:
 
 | Folder | Source |
 |---|---|
-| `data/raw/GREG/` | GREG shapefile (Weidmann, Rød & Cederman 2010), digitised from the Atlas Narodov Mira (1964) |
-| `data/raw/VIIRS/` | harmonized DMSP/VIIRS nighttime lights, Li et al. (2020), 1992–2024 |
+| `data/raw/GREG/` | GREG shapefile, digitised from Murdock (1959) |
+| `data/raw/VIIRS/` | harmonized nighttime lights, Li & Zhou (2017), 1992–2024 |
 | `data/raw/naturalearth/` | Natural Earth country boundaries, 10m and 110m |
 | `data/raw/vreeland/` | Vreeland IMF programme dataset |
 
