@@ -1,14 +1,3 @@
-"""Building the 50 km border strips.
-
-For each partitioned group: find where the two countries touch, buffer that
-line by 50 km, and clip the ethnic polygons to the strip. A side also has to
-lie within 50 km of the *other* side's polygons, otherwise we'd keep bits of
-the group that sit on the border somewhere far away from their counterpart.
-
-The dissolve at the end matters: GREG splits a group into several polygons,
-so without it each side shows up several times per year in the panel.
-"""
-
 import geopandas as gpd
 from pyproj import CRS
 from shapely.ops import unary_union
@@ -18,7 +7,6 @@ import config
 
 
 def buffer_crs():
-    """Equidistant conic for Africa, with Web Mercator as a fallback."""
     try:
         CRS.from_user_input(config.BUFFER_CRS)
         return config.BUFFER_CRS
@@ -35,12 +23,6 @@ def country_name(rows):
 
 
 def find_country(countries, fips, verbose=False):
-    """Look up a country in Natural Earth.
-
-    The raw FIPS code goes against the FIPS columns and the mapped ISO code
-    only against the ISO columns - mixing them up gets you Zambia for South
-    Africa and Chile for Cote d'Ivoire.
-    """
     iso = config.FIPS_TO_ISO.get(fips, fips)
     attempts = [(c, fips) for c in config.FIPS_COLUMNS]
     attempts += [(c, iso) for c in config.ISO_COLUMNS]
@@ -57,7 +39,6 @@ def find_country(countries, fips, verbose=False):
 
 
 def shared_border(countries, fips_a, fips_b, verbose=False):
-    """The line where two countries meet, or None if they don't."""
     a = find_country(countries, fips_a, verbose)
     b = find_country(countries, fips_b, verbose)
     if a is None or b is None:
@@ -70,8 +51,6 @@ def shared_border(countries, fips_a, fips_b, verbose=False):
 
 
 def clip_group(polys, border, fips_a, fips_b):
-    """Clip one group's polygons to the border strip. Returns the clipped rows
-    and which sides survived."""
     metres = config.BUFFER_KM * 1000
     strip = border.buffer(metres)
 
@@ -96,10 +75,6 @@ def clip_group(polys, border, fips_a, fips_b):
 
 
 def build(group_ids, verbose=True):
-    """Border strips for every group in group_ids.
-
-    Returns the dissolved buffers and a dict of what got dropped and why.
-    """
     crs = buffer_crs()
     print(f"buffer CRS: {crs}, width {config.BUFFER_KM} km\n")
 

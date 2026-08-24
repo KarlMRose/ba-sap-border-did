@@ -1,10 +1,3 @@
-"""Finding ethnic groups that a national border splits in two.
-
-GREG stores one row per polygon, not per group, so a group can show up many
-times. What we want are groups whose polygons carry exactly two country codes -
-those are the ones a colonial border cut through.
-"""
-
 import geopandas as gpd
 
 import config
@@ -17,7 +10,6 @@ def load_greg():
 
 
 def group_countries(greg):
-    """One row per group with the list of countries it spans."""
     return (
         greg.groupby("G1ID")
         .agg(
@@ -30,7 +22,6 @@ def group_countries(greg):
 
 
 def partitioned_in_ssa(groups):
-    """Groups split across exactly two countries, both of them in SSA."""
     split = groups[groups["n_countries"] == 2].copy()
     print(f"split across two countries: {len(split)}")
 
@@ -42,8 +33,6 @@ def partitioned_in_ssa(groups):
 
 
 def build_units(greg, partitioned):
-    """One row per ethnicity-country side. COW is what the Vreeland data
-    merges on later."""
     units = (
         greg[greg["G1ID"].isin(partitioned["G1ID"])]
         .groupby(["G1ID", "FIPS_CNTRY"])
@@ -57,7 +46,6 @@ def build_units(greg, partitioned):
     units["unit_id"] = units["G1ID"].astype(str) + "_" + units["FIPS_CNTRY"]
     units["COW"] = units["COW"].astype(int)
 
-    # every group should have exactly two sides here
     sides = units.groupby("G1ID").size()
     bad = sides[sides != 2]
     if len(bad):

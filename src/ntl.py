@@ -1,11 +1,3 @@
-"""Extracting nighttime light intensity for the border strips.
-
-The harmonized series (Li et al. 2020) comes in two parts: inter-calibrated
-DMSP for 1992-2013 and DMSP-like values simulated from VIIRS for 2014-2024.
-2013 exists in both, and we keep the DMSP version so the observed series
-stays continuous.
-"""
-
 import re
 
 import numpy as np
@@ -32,7 +24,6 @@ def parse_filename(path):
 
 
 def extract(buffers):
-    """Mean radiance and pixel count per unit and year."""
     rows = []
     for path in raster_files():
         year, source = parse_filename(path)
@@ -63,9 +54,6 @@ def extract(buffers):
 
 
 def add_outcome(df, offset=None):
-    """ln(mean radiance + c). The offset is arbitrary and the results are
-    sensitive to it, so it lives in config and gets varied in the robustness
-    section."""
     c = config.NTL_OFFSET if offset is None else offset
     df = df.copy()
     df["ln_ntl"] = np.log(df["ntl_mean"].clip(lower=0) + c)
@@ -73,13 +61,9 @@ def add_outcome(df, offset=None):
 
 
 def check(df):
-    """Sanity checks on the extracted panel."""
     missing = df["ntl_mean"].isna().sum()
     print(f"missing radiance values: {missing}")
 
-    # Pixel counts should be constant over time. They wobble slightly because
-    # the DMSP and VIIRS grids aren't perfectly registered - fine as long as
-    # it stays well under a percent.
     counts = df.groupby("unit_id")["ntl_count"].agg(["min", "max"])
     counts["spread_pct"] = 100 * (counts["max"] - counts["min"]) / counts["min"].clip(lower=1)
     worst = counts.sort_values("spread_pct", ascending=False).head(5)

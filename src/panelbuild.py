@@ -1,11 +1,3 @@
-"""Assembling the estimation panel.
-
-Two things happen here. First the sample rules: one treated and one control
-side per group, a first treatment year, no groups that were already treated in
-1992, and a control side that stays clean around the treatment date. Then the
-within-pair difference, which is what the main specification actually runs on.
-"""
-
 import config
 
 
@@ -16,8 +8,6 @@ def _keep_one_treated_side(df):
 
 
 def _control_stays_clean(group, definition, window):
-    """True if the control side has no programme of its own within the window
-    around the treated side's entry. Otherwise the comparison is contaminated."""
     t0 = int(group["first_sap_year"].iloc[0])
     control = group[group["ever_treated"] == 0]
     inside = control[control["year"].between(t0 - window, t0 + window)]
@@ -25,7 +15,6 @@ def _control_stays_clean(group, definition, window):
 
 
 def build(ntl, skeleton, definition="narrow", label=None):
-    """The unit-year panel for one SAP definition."""
     label = label or definition
     treat = skeleton[["unit_id", "year", definition]]
     df = ntl.merge(treat, on=["unit_id", "year"], how="left")
@@ -78,11 +67,6 @@ def _report(df, label):
 
 
 def pair_difference(panel):
-    """One row per group and year, holding the light gap between the two sides.
-
-    With two units per group this is the same model as the unit-level panel
-    with ethnicity-by-year fixed effects.
-    """
     cols = ["G1ID", "name", "year", "ln_ntl", "ntl_mean", "FIPS_CNTRY"]
     treated = (
         panel.loc[panel["treated"] == 1, cols + ["first_sap_year"]]
@@ -108,8 +92,6 @@ def pair_difference(panel):
 
 
 def composition(pair):
-    """The sample table for the appendix: who is treated, by whom controlled,
-    and when."""
     return (
         pair.groupby(["G1ID", "name", "country_pair", "cohort"])
         .agg(mean_treated=("ntl_treated", "mean"),
@@ -127,7 +109,8 @@ def run(ntl, skeleton):
     }
     pair = pair_difference(panels["narrow"])
 
-    panels["narrow"].to_csv(config.WORK / "panel_narrow.csv", index=False)
+    for name, df in panels.items():
+        df.to_csv(config.WORK / f"panel_{name}.csv", index=False)
     pair.to_csv(config.WORK / "pair_panel.csv", index=False)
     composition(pair).to_csv(config.OUT / "sample_composition.csv", index=False)
     return panels, pair

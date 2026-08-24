@@ -1,21 +1,9 @@
-"""Building the treatment variable from the Vreeland IMF dataset.
-
-Treatment is defined at the country-year level: a country is treated in year t
-if it had at least one arrangement of the relevant type running that year.
-Which facilities count depends on the definition (see config.SAP_DEFINITIONS).
-"""
-
 import pandas as pd
 
 import config
 
 
 def load_vreeland(cow_codes):
-    """Vreeland data, restricted to the countries and years we need.
-
-    The .dta has a few strings that aren't valid utf-8 and pandas falls back
-    to latin-1. Doesn't affect the columns used here.
-    """
     v = pd.read_stata(config.VREELAND_DTA)
     v["year"] = v["year"].astype(int)
     v = v[
@@ -27,7 +15,6 @@ def load_vreeland(cow_codes):
 
 
 def sap_indicators(cow_codes):
-    """One row per country-year, with a 0/1 flag for each SAP definition."""
     v = load_vreeland(cow_codes)
 
     def flags(x):
@@ -52,10 +39,6 @@ def sap_indicators(cow_codes):
 
 
 def build_skeleton(units, sap):
-    """Every unit crossed with every year, with the SAP flags merged on.
-
-    Country-years missing from Vreeland had no arrangement, so they get 0.
-    """
     years = pd.DataFrame({"year": range(config.YEAR_MIN, config.YEAR_MAX + 1)})
     skel = units.merge(years, how="cross").merge(sap, on=["COW", "year"], how="left")
 
@@ -68,11 +51,6 @@ def build_skeleton(units, sap):
 
 
 def clean_did_groups(skeleton, definition="narrow"):
-    """Groups where exactly one of the two sides is ever treated.
-
-    Groups with two treated sides have no control, groups with none have no
-    treatment. Either way there is nothing to compare.
-    """
     ever = skeleton.groupby("unit_id")[definition].transform("max")
     skeleton = skeleton.assign(ever_treated=ever)
 
@@ -90,7 +68,6 @@ def clean_did_groups(skeleton, definition="narrow"):
 
 
 def run(units):
-    """Everything above in order: indicators, skeleton, group selection."""
     sap = sap_indicators(units["COW"].unique().tolist())
     skeleton = build_skeleton(units, sap)
     group_ids, skeleton = clean_did_groups(skeleton)

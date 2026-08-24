@@ -1,21 +1,10 @@
-"""Estimation and inference.
-
-The main specification is the within-pair difference: regress the light gap
-between the two halves of an ethnic group on a post-treatment dummy with group
-fixed effects. Everything else here either rewrites that same comparison a
-different way, or checks whether it survives.
-
-With 11 groups the usual cluster-robust standard errors can't be trusted, so
-the numbers reported in the thesis come from the bootstrap and the permutation
-test at the bottom.
-"""
-
 import numpy as np
 import pandas as pd
 import statsmodels.formula.api as smf
 
 import config
 import panelbuild as panel_mod
+import statsmodels.api as sm
 
 MAIN = "gap ~ post + C(G1ID)"
 
@@ -40,11 +29,6 @@ def _row(model, term, label, extra=None):
 
 
 def main_specifications(panel, pair):
-    """Four ways of writing the same comparison, then trend controls.
-
-    The ethnicity-by-year FE model and the pair difference are algebraically
-    identical, so their coefficients have to match.
-    """
     pair = pair.copy()
     pair["trend"] = pair["year"] - pair["year"].min()
 
@@ -65,13 +49,6 @@ def main_specifications(panel, pair):
 
 
 def cohort_effects(pair, min_groups=2):
-    """Separate effect per treatment cohort.
-
-    A cohort made up of a single ethnicity is identified by one cluster only.
-    The cluster-robust variance then collapses to zero and the p-value is
-    meaningless, so those rows keep the point estimate but lose the standard
-    error.
-    """
     model = cluster_fit(pair, "gap ~ post:C(cohort) + C(G1ID)")
     rows = []
     for term in [t for t in model.params.index if t.startswith("post:")]:
@@ -89,13 +66,6 @@ def cohort_effects(pair, min_groups=2):
 
 
 def event_study(pair, window=None, reference=-1):
-    """Coefficients by year relative to treatment.
-
-    Keep the window narrow enough that every event year has several groups in
-    it. At +/-8 the far pre-periods rest on a single group, which makes the
-    clustered covariance matrix rank deficient and the pre-trend F test
-    meaningless.
-    """
     window = window or config.EVENT_WINDOW
     data = pair[pair["rel_year"].between(-window, window)].copy()
 
@@ -128,7 +98,6 @@ def event_study(pair, window=None, reference=-1):
 
 
 def pretrend_test(model, terms):
-    """Joint test that all pre-treatment coefficients are zero."""
     pre = [n for y, n in terms if y < 0]
     test = model.f_test(" = 0, ".join(pre) + " = 0")
     return {
@@ -139,11 +108,6 @@ def pretrend_test(model, terms):
 
 
 def bootstrap(pair, formula=MAIN, term="post", n=None, seed=None):
-    """Resample whole ethnic groups with replacement.
-
-    Groups drawn twice need distinct ids, otherwise the fixed effects merge
-    them back into one.
-    """
     n = n or config.N_BOOTSTRAP
     rng = np.random.default_rng(seed or config.SEED)
     groups = pair["G1ID"].unique()
@@ -164,7 +128,6 @@ def bootstrap(pair, formula=MAIN, term="post", n=None, seed=None):
 
 
 def randomization_inference(pair, n=None, seed=None):
-    """Shuffle the treatment years across groups and refit."""
     n = n or config.N_PERMUTE
     rng = np.random.default_rng(seed or config.SEED)
     groups = sorted(pair["G1ID"].unique())
@@ -185,16 +148,6 @@ def randomization_inference(pair, n=None, seed=None):
 
 
 def describe_draws(draws, observed, label, centre="mean"):
-    """Summarise a set of draws.
-
-    centre="mean" is for the bootstrap: the draws approximate the sampling
-    distribution of the estimate, so the p-value asks how far the estimate
-    sits from zero given that spread.
-
-    centre="zero" is for randomization inference: the draws are the null
-    distribution itself, so the p-value is just how often a permutation
-    produces something at least as large in absolute value.
-    """
     lo, hi = np.percentile(draws, [2.5, 97.5])
     reference = draws.mean() if centre == "mean" else 0.0
     return {
@@ -209,11 +162,8 @@ def describe_draws(draws, observed, label, centre="mean"):
     }
 
 
-# --- robustness -----------------------------------------------------------
 
 def offset_sensitivity(panel, offsets=(0.001, 0.01, 0.1, 1.0)):
-    """The offset in ln(mean + c) is arbitrary and the estimate moves with it,
-    so all four are reported rather than just the default."""
     rows = []
     for c in offsets:
         data = panel.copy()
@@ -224,8 +174,6 @@ def offset_sensitivity(panel, offsets=(0.001, 0.01, 0.1, 1.0)):
 
 
 def window_sensitivity(pair, windows=(5, 8, 12, None)):
-    """Restricting to event time shows whether the estimate is a jump at
-    treatment or a trend picked up over long horizons."""
     rows = []
     for w in windows:
         data = pair if w is None else pair[pair["rel_year"].between(-w, w)]
@@ -237,8 +185,6 @@ def window_sensitivity(pair, windows=(5, 8, 12, None)):
 
 
 def brightness_threshold(pair, thresholds=(0.0, 0.01, 0.05, 0.1)):
-    """Drop the darkest pairs. Where mean radiance is around 0.007 the offset
-    is larger than the signal, so those groups measure very little."""
     dim = (
         pair.groupby("G1ID")[["ntl_treated", "ntl_control"]].mean()
         .min(axis=1).rename("dimmest_side")
@@ -263,12 +209,6 @@ BIN_REFERENCE = "−2 to −1"
 
 
 def event_time_bins(pair, edges=None, labels=None, reference=None):
-    """Effect by broad bands of event time.
-
-    The event study only reaches +/-5, but the panel runs to +31 for the
-    earliest cohort. Binning shows the long horizon, which is where the pooled
-    estimate actually comes from.
-    """
     edges = edges or BIN_EDGES
     labels = labels or BIN_LABELS
     reference = reference or BIN_REFERENCE
@@ -303,11 +243,6 @@ def event_time_bins(pair, edges=None, labels=None, reference=None):
     return out.reset_index(drop=True), model
 
 def callaway_santanna(panel):
-    """Cohort ATTs in the spirit of Callaway & Sant'Anna (2021).
-
-    Reported for comparison only: the estimator assumes treatment is
-    absorbing, which the programme episodes show is not the case here.
-    """
     cohorts = sorted(panel.loc[panel["treated"] == 1, "first_sap_year"].dropna().unique())
     cohorts = [int(g) for g in cohorts if g > panel["year"].min()]
 
@@ -322,7 +257,6 @@ def callaway_santanna(panel):
         sub = panel[panel["unit_id"].isin([*treated_units, *control_units])].copy()
         sub["cohort_treat"] = sub["unit_id"].isin(treated_units).astype(int)
 
-        # a not-yet-treated control only counts until its own entry
         sub = sub[~((sub["cohort_treat"] == 0) & (sub["treated"] == 1) &
                     (sub["year"] >= sub["first_sap_year"]))]
         sub["interaction"] = sub["cohort_treat"] * (sub["year"] >= g).astype(int)
@@ -340,7 +274,6 @@ def callaway_santanna(panel):
     return out, float((out["att"] * weights).sum())
 
 def programme_spells(panel, definition="narrow"):
-    """Contiguous programme episodes per treated side."""
     rows = []
     for gid, g in panel[panel["treated"] == 1].sort_values("year").groupby("G1ID"):
         years = g.loc[g[definition] == 1, "year"].tolist()
@@ -358,8 +291,6 @@ def programme_spells(panel, definition="narrow"):
 
 
 def add_active(pair, panel, definition="narrow"):
-    """Flag the years in which a programme is actually running, plus the
-    year-on-year changes used for the entry and exit regressions."""
     active = (panel.loc[panel["treated"] == 1, ["G1ID", "year", definition]]
               .rename(columns={definition: "active"}))
     out = pair.merge(active, on=["G1ID", "year"], how="left").sort_values(["G1ID", "year"])
@@ -371,9 +302,6 @@ def add_active(pair, panel, definition="narrow"):
 
 
 def on_off_specifications(pair_active):
-    """The programme as something that switches on and off, not as an
-    absorbing state. C&S and the usual event-study estimators assume the
-    latter, which the spells table shows does not hold here."""
     fd = pair_active.dropna(subset=["d_gap", "d_active"])
     both = "gap ~ post + active + C(G1ID)"
     return pd.DataFrame([
@@ -388,6 +316,55 @@ def on_off_specifications(pair_active):
         _row(cluster_fit(fd, "d_gap ~ entry + exit + C(G1ID)"), "exit",
              f"exit ({int(fd['exit'].sum())} events)"),
     ])
+
+def robustness_table(panels, pair, buffer_areas=None):
+    rows = []
+
+    def add(data, label, formula=MAIN, term="post"):
+        if data["post"].nunique() < 2 or data["G1ID"].nunique() < 3:
+            print(f"  skipped: {label}")
+            return
+        rows.append(_row(cluster_fit(data, formula), term, label,
+                         {"groups": int(data["G1ID"].nunique())}))
+
+    add(pair, "baseline (narrow definition)")
+
+    labels = {"eff": "narrow plus EFF", "broad": "all IMF arrangements"}
+    for name, unit_panel in panels.items():
+        if name == "narrow":
+            continue
+        add(panel_mod.pair_difference(unit_panel), f"SAP: {labels.get(name, name)}")
+
+    dim = (pair.groupby("G1ID")[["ntl_treated", "ntl_control"]].mean()
+           .min(axis=1).rename("dimmest_side"))
+    bright = pair.merge(dim, on="G1ID")
+    add(bright[bright["dimmest_side"] > 0.01], "dimmest side above 0.01")
+
+    add(pair[pair["year"] <= 2013], "panel restricted to 1992-2013")
+
+    if buffer_areas is not None:
+        ar = buffer_areas.groupby("G1ID")["area_km2"].agg(["min", "max"]).reset_index()
+        ar["ratio"] = ar["max"] / ar["min"]
+        with_ratio = pair.merge(ar[["G1ID", "ratio"]], on="G1ID", how="left")
+        for limit in (5, 3):
+            add(with_ratio[with_ratio["ratio"] <= limit], f"area ratio at most {limit}:1")
+
+    ppml = panels["narrow"].copy()
+    ppml["y"] = ppml["ntl_mean"].clip(lower=0) * 1000
+    try:
+        m = smf.glm("y ~ treated_x_post + C(unit_id) + C(year)", data=ppml,
+                    family=sm.families.Poisson()).fit(
+            cov_type="cluster", cov_kwds={"groups": ppml["G1ID"]}, maxiter=300)
+        rows.append({"spec": "PPML in levels (unit and year FE)",
+                     "coef": float(m.params["treated_x_post"]),
+                     "se": float(m.bse["treated_x_post"]),
+                     "p": float(m.pvalues["treated_x_post"]),
+                     "n": int(m.nobs),
+                     "groups": int(ppml["G1ID"].nunique())})
+    except Exception as exc:
+        print(f"  PPML failed: {str(exc)[:70]}")
+
+    return pd.DataFrame(rows)
 
 def run(panel, pair):
     specs = main_specifications(panel, pair)
@@ -411,3 +388,61 @@ def run(panel, pair):
     event_time_bins(pair)[0].to_csv(config.OUT / "event_time_bins.csv", index=False)
 
     return specs, inference, coefs
+
+def did_m(data, outcome="gap", treat="active", unit="G1ID", time="year",
+          placebo=False):
+    d = data[[unit, time, outcome, treat]].dropna().sort_values([unit, time]).copy()
+    d["lag_treat"] = d.groupby(unit)[treat].shift(1)
+    d["delta"] = d.groupby(unit)[outcome].diff()
+    if placebo:
+        d["delta"] = d.groupby(unit)["delta"].shift(1)
+    d = d.dropna(subset=["lag_treat", "delta"])
+
+    rows = []
+    for t, g in d.groupby(time):
+        joiners = g.loc[(g["lag_treat"] == 0) & (g[treat] == 1), "delta"]
+        stay_off = g.loc[(g["lag_treat"] == 0) & (g[treat] == 0), "delta"]
+        leavers = g.loc[(g["lag_treat"] == 1) & (g[treat] == 0), "delta"]
+        stay_on = g.loc[(g["lag_treat"] == 1) & (g[treat] == 1), "delta"]
+
+        if len(joiners) and len(stay_off):
+            rows.append({time: t, "type": "switch on", "switchers": len(joiners),
+                         "stayers": len(stay_off),
+                         "effect": float(joiners.mean() - stay_off.mean())})
+        if len(leavers) and len(stay_on):
+            rows.append({time: t, "type": "switch off", "switchers": len(leavers),
+                         "stayers": len(stay_on),
+                         "effect": float(stay_on.mean() - leavers.mean())})
+
+    per_period = pd.DataFrame(rows)
+    if per_period.empty:
+        return per_period, float("nan")
+    agg = float((per_period["effect"] * per_period["switchers"]).sum()
+                / per_period["switchers"].sum())
+    return per_period, agg
+
+
+def did_m_bootstrap(data, n=None, seed=None, unit="G1ID", **kwargs):
+    n = n or config.N_BOOTSTRAP
+    rng = np.random.default_rng(seed or config.SEED)
+    groups = data[unit].unique()
+
+    draws = []
+    for _ in range(n):
+        parts = []
+        for k, g in enumerate(rng.choice(groups, size=len(groups), replace=True)):
+            part = data[data[unit] == g].copy()
+            part[unit] = f"{g}_{k}"
+            parts.append(part)
+        _, agg = did_m(pd.concat(parts, ignore_index=True), unit=unit, **kwargs)
+        if np.isfinite(agg):
+            draws.append(agg)
+    return np.array(draws)
+
+
+def twfe_weights(data, treat="active", unit="G1ID", time="year"):
+    d = data[[unit, time, treat]].dropna().copy()
+    d["resid"] = smf.ols(f"{treat} ~ C({unit}) + C({time})", data=d).fit().resid
+    w = d[d[treat] == 1].copy()
+    w["weight"] = w["resid"] / w["resid"].sum()
+    return w[[unit, time, "weight"]].reset_index(drop=True)
