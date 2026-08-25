@@ -110,7 +110,7 @@ def permutation(draws, observed, name="randomization_inference"):
     ax.hist(draws, bins=40, color=config.LIGHT, edgecolor="white", lw=0.4)
     ax.axvline(0, color="black", lw=0.7, ls="--", label="No effect")
     ax.axvline(observed, color=config.ACCENT, lw=1.4,
-               label=f"Observed = {observed:.3f}")
+               label="Observed = " + f"{observed:.3f}".replace("-", "\u2212"))
 
     ax.set_xlabel("Coefficient under permuted treatment timing")
     ax.set_ylabel("Permutations")
