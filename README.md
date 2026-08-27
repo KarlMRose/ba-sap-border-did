@@ -21,7 +21,8 @@ output/      generated tables and figures
 
 ## Data
 
-Raw data are not in this repository. They ship separately as `data_package.zip`.
+Raw data are not in this repository. They ship separately as `data.zip`.
+URL: https://drive.google.com/file/d/1O4MgmJZiOJM1w3eXYQHyKwmyieyrZHD3/view?usp=drive_link
 
 Extract the ZIP into the project folder so that this path exists:
 
